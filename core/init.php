@@ -26,11 +26,6 @@ if (intval(ini_get("memory_limit")) < 1024)
     ini_set('memory_limit', '1024M');
 }
 
-if( PHP_SAPI != 'cli' )
-{
-    exit("You must run the CLI environment\n");
-}
-
 // 设置时区
 date_default_timezone_set('Asia/Shanghai');
 
@@ -70,32 +65,3 @@ function autoload($classname) {
 
 spl_autoload_extensions('.php');
 spl_autoload_register('autoload');
-
-/**
- * 自动加载类库处理
- * @return void
- */
-//function __autoload( $classname )
-//{
-    //$classname = preg_replace("/[^0-9a-z_]/i", '', $classname);
-    //if( class_exists ( $classname ) ) {
-        //return true;
-    //}
-    //$classfile = $classname.'.php';
-    //try
-    //{
-        //if ( file_exists ( PATH_LIBRARY.'/'.$classfile ) )
-        //{
-            //require PATH_LIBRARY.'/'.$classfile;
-        //}
-        //else
-        //{
-            //throw new Exception ( 'Error: Cannot find the '.$classname );
-        //}
-    //}
-    //catch ( Exception $e )
-    //{
-        //log::error($e->getMessage().'|'.$classname);
-        //exit();
-    //}
-//}

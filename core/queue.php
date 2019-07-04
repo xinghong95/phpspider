@@ -15,8 +15,8 @@
 
 namespace phpspider\core;
 
-use Exception;
 use Redis;
+use Exception;
 
 class queue
 {
@@ -35,15 +35,15 @@ class queue
     /**
      *  默认redis前缀
      */
-    public static $prefix = 'phpspider';
+    public static $prefix  = "phpspider";
 
-    public static $error = '';
+    public static $error  = "";
 
     public static function init()
     {
-        if ( ! extension_loaded('redis'))
+        if (!extension_loaded("redis"))
         {
-            self::$error = 'The redis extension was not found';
+            self::$error = "The redis extension was not found";
             return false;
         }
 
@@ -55,38 +55,26 @@ class queue
         if (empty(self::$links[self::$link_name]))
         {
             self::$links[self::$link_name] = new Redis();
-            if (strstr($config['host'], '.sock'))
+            if (!self::$links[self::$link_name]->connect($config['host'], $config['port'], $config['timeout']))
             {
-                if ( ! self::$links[self::$link_name]->connect($config['host']))
-                {
-                    self::$error = 'Unable to connect to redis server';
-                    unset(self::$links[self::$link_name]);
-                    return false;
-                }
-            }
-            else
-            {
-                if ( ! self::$links[self::$link_name]->connect($config['host'], $config['port'], $config['timeout']))
-                {
-                    self::$error = 'Unable to connect to redis server';
-                    unset(self::$links[self::$link_name]);
-                    return false;
-                }
+                self::$error = "Unable to connect to redis server";
+                unset(self::$links[self::$link_name]);
+                return false;
             }
 
             // 验证
             if ($config['pass'])
             {
-                if ( ! self::$links[self::$link_name]->auth($config['pass']))
+                if ( !self::$links[self::$link_name]->auth($config['pass']) ) 
                 {
-                    self::$error = 'Redis Server authentication failed';
+                    self::$error = "Redis Server authentication failed";
                     unset(self::$links[self::$link_name]);
                     return false;
                 }
             }
 
             $prefix = empty($config['prefix']) ? self::$prefix : $config['prefix'];
-            self::$links[self::$link_name]->setOption(Redis::OPT_PREFIX, $prefix.':');
+            self::$links[self::$link_name]->setOption(Redis::OPT_PREFIX, $prefix . ":");
             // 永不超时
             // ini_set('default_socket_timeout', -1); 无效，要用下面的做法
             self::$links[self::$link_name]->setOption(Redis::OPT_READ_TIMEOUT, -1);
@@ -119,7 +107,7 @@ class queue
         {
             if (empty(self::$configs[self::$link_name]))
             {
-                throw new Exception('You not set a config array for connect!');
+                throw new Exception("You not set a config array for connect!");
             }
         }
         //print_r(self::$configs);
@@ -259,10 +247,7 @@ class queue
      */
     public static function lock($name, $value = 1, $expire = 5, $interval = 100000)
     {
-        if ($name == null)
-        {
-            return false;
-        }
+        if ($name == null) return false;
 
         self::init();
         try
@@ -631,7 +616,7 @@ class queue
                 return self::dbsize();
             }
         }
-        return 0;
+        return NULL;
     }
 
     /**
@@ -1280,109 +1265,6 @@ class queue
     {
         return json_decode($value, true);
     }
-
-    /**
-     * 集合操作
-     */
-    
-    /**
-     * sadd 将数据压入集合
-     *
-     * @param mixed $key
-     * @param mixed $value
-     * @return void
-     * @author seatle <seatle@foxmail.com>
-     * @created time :2015-12-13 01:05
-     */
-    public static function sadd($key, $value)
-    {
-        self::init();
-        try
-        {
-            if (self::$links[self::$link_name])
-            {
-                return self::$links[self::$link_name]->sadd($key, $value);
-            }
-        }
-        catch (Exception $e)
-        {
-            $msg = "PHP Fatal error:  Uncaught exception 'RedisException' with message '".$e->getMessage()."'\n";
-            log::warn($msg);
-            if ($e->getCode() == 0)
-            {
-                self::$links[self::$link_name]->close();
-                self::$links[self::$link_name] = null;
-                usleep(100000);
-                return self::sadd($key, $value);
-            }
-        }
-        return null;
-    }
-
-    /**
-     * spop 从集合中随机取出数据并移除
-     *
-     * @param mixed $key
-     * @return void
-     * @author seatle <seatle@foxmail.com>
-     * @created time :2015-12-13 01:05
-     */
-    public static function spop($key)
-    {
-        self::init();
-        try
-        {
-            if (self::$links[self::$link_name])
-            {
-                return self::$links[self::$link_name]->spop($key);
-            }
-        }
-        catch (Exception $e)
-        {
-            $msg = "PHP Fatal error:  Uncaught exception 'RedisException' with message '".$e->getMessage()."'\n";
-            log::warn($msg);
-            if ($e->getCode() == 0)
-            {
-                self::$links[self::$link_name]->close();
-                self::$links[self::$link_name] = null;
-                usleep(100000);
-                return self::spop($key);
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Redis Scard 命令返回集合中元素的数量。
-     *
-     * @param mixed $key
-     * @return void
-     * @author seatle <seatle@foxmail.com>
-     * @created time :2015-12-13 01:05
-     */
-    public static function scard($key)
-    {
-        self::init();
-        try
-        {
-            if (self::$links[self::$link_name])
-            {
-                return self::$links[self::$link_name]->scard($key);
-            }
-        }
-        catch (Exception $e)
-        {
-            $msg = "PHP Fatal error:  Uncaught exception 'RedisException' with message '".$e->getMessage()."'\n";
-            log::warn($msg);
-            if ($e->getCode() == 0)
-            {
-                self::$links[self::$link_name]->close();
-                self::$links[self::$link_name] = null;
-                usleep(100000);
-                return self::scard($key);
-            }
-        }
-        return null;
-    }
-
 }
+
+

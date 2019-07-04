@@ -1,7 +1,8 @@
-# phpspider -- PHP蜘蛛爬虫接口
-由于公司项目需要根据寄售编号、邮编爬取https://www.xdp.co.uk/的物流数据，且我司未与该公司沟通合作开通相关查询接口，因此，对https://github.com/owner888/phpspider项目进行了二次开发，删减了部分代码，修改为web爬虫接口，修改了日志存储策略，并将数据以json形式返回。
+<?php
+require_once __DIR__ . '/../autoloader.php';
+use phpspider\core\phpspider;
+use phpspider\core\log;
 
-```
 $configs = array(
 	//爬虫名称
     'name' => 'xdp',
@@ -142,11 +143,89 @@ $configs = array(
         )
     ),
 );
-```
-爬虫的整体框架就是这样, 首先定义了一个$configs数组, 里面设置了待爬网站的一些信息, 然后通过调用```$spider = new phpspider($configs);```和```$spider->start();```来配置并启动爬虫.
+
+define('API_TOKEN' , '46m8F7sAtBkTy2rh45');
+
+$spider = new phpspider($configs);
+
+/**
+ * 爬虫初始化时进行的回调, 用来指定一些爬取前的操作
+ */
+$spider->on_start = function($spider)
+{
+    if ($_SERVER['REQUEST_METHOD']=="GET")
+    {
+        $token = trim($_GET['token']);
+        $c = trim($_GET['c']);
+        $code = trim($_GET['code']);
+        is_token($c, $code, $token);
+    }
+    else
+    {
+        log::error('http method error');
+        exit();
+    }
+
+    $url = 'https://www.xdp.co.uk/track.php?c='.$c.'&code='.$code;
+    $link = array('url'=>$url, 'url_type'=>'content_page');
+    $spider::$collect_queue = array($link);
+
+    return $spider::$collect_queue;
+};
+
+/**
+ * 在一个网页下载完成之后进行的回调. 主要用来对下载的网页进行处理
+ */
+$spider->on_download_page = function($page, $spider)
+{
+    $page['raw'] = implode(preg_split("/[\f\n\r\t\v]+/", $page['raw']));
+
+    return $page;
+};
+
+/**
+ * 当一个field的内容被抽取到后进行的回调, 对网页中抽取的内容作进一步处理
+ */
+$spider->on_extract_field = function($fieldname, $data, $page)
+{
+    $data = str_rep($data);
+
+    return $data;
+};
+
+/**
+ * 递归处理数据，删除首尾空白字符、替换<br \>
+ */
+function str_rep($data)
+{
+    if (is_array($data))
+    {
+        foreach ($data as $k => $v)
+        {
+            $data[$k] = str_rep($v);
+        }
+    }
+    else
+    {
+        $data = trim((string)$data);
+        $data = str_replace('<br />', ' ', $data);
+    }
+
+    return $data;
+}
+
+//判断token是否为空、是否正确
+function is_token($c, $code, $token)
+{
+    if (empty($token) || $token != md5($c.$code.API_TOKEN))
+    {
+        log::error('token error: '.$token. '!='. md5($c.$code.API_TOKEN));
+        exit();
+    }
+}
+
+$fields = $spider->start();
+
+echo $fields;
 
 
-
-更多详细内容，移步到：
-
-[开发文档](http://doc.phpspider.org)

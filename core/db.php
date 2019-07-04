@@ -21,9 +21,8 @@ class db
     private static $rsid;
     private static $links = array();
     private static $link_name = 'default';
-    private static $autocommiting = false;
 
-    public static function _init()
+    public static function init_mysql()
     {
         // 获取配置
         $config = self::$link_name == 'default' ? self::_get_default_config() : self::$configs[self::$link_name];
@@ -50,7 +49,7 @@ class db
                 {
                     exit(250);
                 }
-                self::_init($config);
+                self::init_mysql($config);
             }
             else
             {
@@ -90,7 +89,7 @@ class db
             }
         }
         // 注意，只会连接最后一个，不过貌似也够用了啊
-        self::_init();
+        self::init_mysql();
     }
 
     /**
@@ -156,35 +155,31 @@ class db
 
     public static function autocommit($mode = false)
     {
-        if ( self::$autocommiting ) 
-        {
-            return true;
-        }
-
-        self::$autocommiting = true;
-
-        self::_init();
+        //self::$links[self::$link_name]['conn'] = self::init_mysql();
+        // $int = $mode ? 1 : 0;
+        // return @mysqli_query(self::$links[self::$link_name]['conn'], "SET autocommit={$int}");
+        self::init_mysql();
         return mysqli_autocommit(self::$links[self::$link_name]['conn'], $mode);
     }
 
     public static function begin_tran()
     {
+        // self::$links[self::$link_name]['conn'] = self::init_mysql( true );
+        // return @mysqli_query(self::$links[self::$link_name]['conn'], 'BEGIN');
         return self::autocommit(false);
     }
 
     public static function commit()
     {
-        mysqli_commit(self::$links[self::$link_name]['conn']);
-        self::autocommit(true);
-        return true;
+        self::init_mysql();
+        return mysqli_commit(self::$links[self::$link_name]['conn']);
     }
 
 
     public static function rollback()
     {
-        mysqli_rollback(self::$links[self::$link_name]['conn']);
-        self::autocommit(true);
-        return true;
+        self::init_mysql();
+        return mysqli_rollback(self::$links[self::$link_name]['conn']);
     }
 
     public static function query($sql)
@@ -192,7 +187,7 @@ class db
         $sql = trim($sql);
 
         // 初始化数据库
-        self::_init();
+        self::init_mysql();
         self::$rsid = @mysqli_query(self::$links[self::$link_name]['conn'], $sql);
 
         if (self::$rsid === false)
@@ -249,7 +244,7 @@ class db
         return $row;
     }
 
-    public static function get_one($sql)
+    public static function get_one($sql, $func = '')
     {
         if (!preg_match("/limit/i", $sql))
         {
@@ -258,25 +253,33 @@ class db
         $rsid = self::query($sql);
         if ($rsid === false) 
         {
-            return array();
+            return;
         }
         $row = self::fetch($rsid);
         self::free($rsid);
+        if (!empty($func))
+        {
+            return call_user_func($func, $row);
+        }
         return $row;
     }
 
-    public static function get_all($sql)
+    public static function get_all($sql, $func = '')
     {
         $rsid = self::query($sql);
         if ($rsid === false) 
         {
-            return array();
+            return;
         }
         while ( $row = self::fetch($rsid) )
         {
             $rows[] = $row;
         }
         self::free($rsid);
+        if (!empty($func))
+        {
+            return call_user_func($func, $rows);
+        }
         return empty($rows) ? false : $rows;
     }
 
@@ -504,7 +507,7 @@ class db
         {
             @mysqli_close(self::$links[self::$link_name]['conn']);
             self::$links[self::$link_name]['conn'] = null;
-            self::_init();
+            self::init_mysql();
         }
     }
 

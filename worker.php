@@ -24,8 +24,6 @@ function reverse_fn($job)
     return strrev($job->workload());
 }
 
-
-echo "hello\n";
 ?>
 
 

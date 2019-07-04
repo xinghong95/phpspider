@@ -9,37 +9,6 @@
 // | Author: Seatle Yang <seatle@foxmail.com>
 // +----------------------------------------------------------------------
 
-// +----------------------------------------------------------------------
-// | GET请求
-// | requests::get('http://www.test.com');
-// | SERVER
-// | $_GET
-// +----------------------------------------------------------------------
-// | POST请求
-// | $data = array('name'=>'request');
-// | requests::post('http://www.test.com', $data);
-// | SERVER
-// | $_POST
-// +----------------------------------------------------------------------
-// | POST RESTful请求
-// | $data = array('name'=>'request');
-// | $data_string = json_encode($data);
-// | requests::set_header("Content-Type", "application/json");
-// | requests::post('http://www.test.com', $data_string);
-// | SERVER
-// | file_get_contents('php://input')
-// +----------------------------------------------------------------------
-// | POST 文件上传
-// | $data = array('file1'=>''./data/phpspider.log'');
-// | requests::post('http://www.test.com', null, $data);
-// | SERVER
-// | $_FILES
-// +----------------------------------------------------------------------
-// | 代理
-// | requests::set_proxy(array('223.153.69.150:42354'));
-// | $html = requests::get('https://www.test.com');
-// +----------------------------------------------------------------------
-
 //----------------------------------
 // PHPSpider请求类文件
 //----------------------------------
@@ -58,7 +27,7 @@ if (!function_exists('curl_file_create'))
 
 class requests
 {
-    const VERSION = '2.0.1';
+    const VERSION = '2.0.0';
 
     protected static $ch = null;
 
@@ -66,11 +35,11 @@ class requests
 
     /* user definable vars */
 
-    public static $timeout         = 15;
-    public static $encoding        = null;
-    public static $input_encoding  = null;
+    public static $timeout = 5;
+    public static $encoding = null;
+    public static $input_encoding = null;
     public static $output_encoding = null;
-    public static $cookies         = array(); // array of cookies to pass
+    public static $cookies = array();                           // array of cookies to pass
     // $cookies['username'] = "seatle";
     public static $rawheaders = array();                        // array of raw headers to send
     public static $domain_cookies = array();                    // array of cookies for domain to pass
@@ -116,19 +85,6 @@ class requests
     public static function set_proxy($proxy)
     {
         self::$proxies = is_array($proxy) ? $proxy : array($proxy);
-    }
-
-    /**
-     * 删除代理
-     * 因为每个链接信息里面都有代理信息，有的链接需要，有的不需要，所以必须提供一个删除功能
-     * 
-     * @return void
-     * @author seatle <seatle@foxmail.com> 
-     * @created time :2018-07-16 17:59
-     */
-    public static function del_proxy()
-    {
-        self::$proxies = array();
     }
 
     /**
@@ -178,17 +134,17 @@ class requests
      */
     public static function set_cookies($cookies, $domain = '')
     {
-        $cookies_arr = explode(';', $cookies);
-        if (empty($cookies_arr))
+        $cookies_arr = explode(";", $cookies);
+        if (empty($cookies_arr)) 
         {
             return false;
         }
 
         foreach ($cookies_arr as $cookie) 
         {
-            $cookie_arr = explode('=', $cookie, 2);
-            $key        = $cookie_arr[0];
-            $value      = empty($cookie_arr[1]) ? '' : $cookie_arr[1];
+            $cookie_arr = explode("=", $cookie, 2);
+            $key = $cookie_arr[0];
+            $value = empty($cookie_arr[1]) ? '' : $cookie_arr[1];
 
             if (!empty($domain)) 
             {
@@ -335,29 +291,6 @@ class requests
     }
 
     /**
-     * 删除伪造IP
-     * 
-     * @return void
-     * @author seatle <seatle@foxmail.com> 
-     * @created time :2018-07-16 17:59
-     */
-    public static function del_client_ip()
-    {
-        self::$client_ips = array();
-    }
-
-    /**
-     * 设置中文请求
-     * 
-     * @param string $lang
-     * @return void
-     */
-    public static function set_accept_language($lang = 'zh-CN')
-    {
-        self::$rawheaders['Accept-Language'] = $lang;
-    }
-
-    /**
      * 设置Hosts
      * 负载均衡到不同的服务器，如果对方使用CDN，采用这个是最好的了
      *
@@ -414,10 +347,43 @@ class requests
             //$body = implode("\r\n\r\n", $array);
         //}
 
+        // 如果用户没有明确指定输入的页面编码格式(utf-8, gb2312)，通过程序去判断
+        if(self::$input_encoding == null)
+        {
+            // 从头部获取
+            preg_match("/charset=([^\s]*)/i", $head, $out);
+            $encoding = empty($out[1]) ? '' : str_replace(array('"', '\''), '', strtolower(trim($out[1])));
+            //$encoding = null;
+            if (empty($encoding)) 
+            {
+                // 在某些情况下,无法再 response header 中获取 html 的编码格式
+                // 则需要根据 html 的文本格式获取
+                $encoding = self::get_encoding($body);
+                $encoding = strtolower($encoding);
+                if($encoding == false || $encoding == "ascii")
+                {
+                    $encoding = 'gbk';
+                }
+            }
+
+            // 没有转码前
+            self::$encoding = $encoding;
+            self::$input_encoding = $encoding;
+        }
+
         // 设置了输出编码的转码，注意: xpath只支持utf-8，iso-8859-1 不要转，他本身就是utf-8
-        $body = self::encoding($body); //自动转码
-        // 转码后
-        self::$encoding = self::$output_encoding;
+        if (self::$output_encoding && self::$input_encoding != self::$output_encoding && self::$input_encoding != 'iso-8859-1') 
+        {
+            // 先将非utf8编码,转化为utf8编码
+            $body = @mb_convert_encoding($body, self::$output_encoding, self::$input_encoding);
+            // 将页面中的指定的编码方式修改为utf8
+            $body = preg_replace("/<meta([^>]*)charset=([^>]*)>/is", '<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>', $body);
+            // 直接干掉头部，国外很多信息是在头部的
+            //$body = self::_remove_head($body);
+
+            // 转码后
+            self::$encoding = self::$output_encoding;
+        }
 
         // The body after encoding
         self::$text = $body;
@@ -442,11 +408,11 @@ class requests
         // 解析到Cookie
         if (!empty($cookies)) 
         {
-            $cookies = implode(';', $cookies);
-            $cookies = explode(';', $cookies);
-            foreach ($cookies as $cookie)
+            $cookies = implode(";", $cookies);
+            $cookies = explode(";", $cookies);
+            foreach ($cookies as $cookie) 
             {
-                $cookie_arr = explode('=', $cookie, 2);
+                $cookie_arr = explode("=", $cookie, 2);
                 // 过滤 httponly、secure
                 if (count($cookie_arr) < 2) 
                 {
@@ -484,10 +450,10 @@ class requests
         {
             foreach ($header_lines as $line) 
             {
-                $header_arr = explode(':', $line, 2);
-                $key        = empty($header_arr[0]) ? '' : trim($header_arr[0]);
-                $val        = empty($header_arr[1]) ? '' : trim($header_arr[1]);
-                if (empty($key) || empty($val))
+                $header_arr = explode(":", $line, 2);
+                $key = empty($header_arr[0]) ? '' : trim($header_arr[0]);
+                $val = empty($header_arr[1]) ? '' : trim($header_arr[1]);
+                if (empty($key) || empty($val)) 
                 {
                     continue;
                 }
@@ -505,7 +471,7 @@ class requests
      */
     public static function get_encoding($string)
     {
-        $encoding = mb_detect_encoding($string, array('UTF-8', 'GBK', 'GB2312', 'LATIN1', 'ASCII', 'BIG5', 'ISO-8859-1'));
+        $encoding = mb_detect_encoding($string, array('UTF-8', 'GBK', 'GB2312', 'LATIN1', 'ASCII', 'BIG5'));
         return strtolower($encoding);
     }
 
@@ -555,10 +521,9 @@ class requests
             }
             else 
             {
-                curl_setopt(self::$ch, CURLOPT_CONNECTTIMEOUT, ceil(self::$timeout / 2));
-                curl_setopt(self::$ch, CURLOPT_TIMEOUT, self::$timeout);
+                curl_setopt( self::$ch, CURLOPT_CONNECTTIMEOUT, self::$timeout );
+                curl_setopt( self::$ch, CURLOPT_TIMEOUT, self::$timeout);
             }
-            curl_setopt(self::$ch, CURLOPT_MAXREDIRS, 5); //maximum number of redirects allowed
             // 在多线程处理场景下使用超时选项时，会忽略signals对应的处理函数，但是无耐的是还有小概率的crash情况发生
             curl_setopt( self::$ch, CURLOPT_NOSIGNAL, true);
         }
@@ -654,7 +619,7 @@ class requests
         // 如果是 get 方式，直接拼凑一个 url 出来
         if ($method == 'GET' && !empty($fields)) 
         {
-            $url = $url.(strpos($url, '?') === false ? '?' : '&').http_build_query($fields);
+            $url = $url . (strpos($url,"?")===false ? "?" : "&") . http_build_query($fields);
         }
 
         $parse_url = parse_url($url);
@@ -686,21 +651,7 @@ class requests
             // 如果是 post 方式
             if ($method == 'POST')
             {
-                //curl_setopt( self::$ch, CURLOPT_POST, true );
-                $tmpheaders = array_change_key_case(self::$rawheaders, CASE_LOWER);
-                // 有些RESTful服务只接受JSON形态的数据
-                // CURLOPT_POST会把上傳的文件类型设为 multipart/form-data
-                // 把CURLOPT_POSTFIELDS的内容按multipart/form-data 的形式编码
-                // CURLOPT_CUSTOMREQUEST可以按指定内容上传
-                if ( isset($tmpheaders['content-type']) && $tmpheaders['content-type'] == 'application/json' ) 
-                {
-                    curl_setopt( self::$ch, CURLOPT_CUSTOMREQUEST, $method ); 
-                }
-                else 
-                {
-                    curl_setopt( self::$ch, CURLOPT_POST, true );
-                }
-
+                curl_setopt( self::$ch, CURLOPT_POST, true );
                 $file_fields = array();
                 if (!empty($files)) 
                 {
@@ -726,8 +677,7 @@ class requests
                 self::$rawheaders['X-HTTP-Method-Override'] = $method;
                 curl_setopt( self::$ch, CURLOPT_CUSTOMREQUEST, $method ); 
             }
-
-            if ( $method == 'POST' ) 
+            if (!empty($fields)) 
             {
                 // 不是上传文件的，用http_build_query, 能实现更好的兼容性，更小的请求数据包
                 if ( empty($file_fields) ) 
@@ -751,7 +701,6 @@ class requests
                         $fields = $file_fields;
                     }
                 }
-
                 // 不能直接传数组，不知道是什么Bug，会非常慢
                 curl_setopt( self::$ch, CURLOPT_POSTFIELDS, $fields );
             }
@@ -765,10 +714,10 @@ class requests
         {
             foreach ($cookies as $key=>$value) 
             {
-                $cookie_arr[] = $key.'='.$value;
+                $cookie_arr[] = $key."=".$value;
             }
-            $cookies = implode('; ', $cookie_arr);
-            curl_setopt(self::$ch, CURLOPT_COOKIE, $cookies);
+            $cookies = implode("; ", $cookie_arr);
+            curl_setopt( self::$ch, CURLOPT_COOKIE, $cookies );
         }
 
         if (!empty(self::$useragents)) 
@@ -779,19 +728,19 @@ class requests
 
         if (!empty(self::$client_ips)) 
         {
-            $key                                 = rand(0, count(self::$client_ips) - 1);
-            self::$rawheaders['CLIENT-IP']       = self::$client_ips[$key];
-            self::$rawheaders['X-FORWARDED-FOR'] = self::$client_ips[$key];
+            $key = rand(0, count(self::$client_ips) - 1);
+            self::$rawheaders["CLIENT-IP"] = self::$client_ips[$key];
+            self::$rawheaders["X-FORWARDED-FOR"] = self::$client_ips[$key];
         }
 
         if (self::$rawheaders)
         {
-            $http_headers = array();
+            $headers = array();
             foreach (self::$rawheaders as $k=>$v) 
             {
-                $http_headers[] = $k.': '.$v;
+                $headers[] = $k.": ".$v;
             }
-            curl_setopt( self::$ch, CURLOPT_HTTPHEADER, $http_headers );
+            curl_setopt( self::$ch, CURLOPT_HTTPHEADER, $headers );
         }
 
         curl_setopt( self::$ch, CURLOPT_ENCODING, 'gzip' );
@@ -864,7 +813,7 @@ class requests
         $fp  = finfo_open(FILEINFO_MIME);
         $mime = finfo_file($fp, $filepath);
         finfo_close($fp);
-        $arr  = explode(';', $mime);
+        $arr = explode(";", $mime);
         $type = empty($arr[0]) ? '' : $arr[0];
         return $type;
     }
@@ -887,8 +836,8 @@ class requests
         // 表单数据
         foreach ($post_fields as $name => $content) 
         {
-            $data .= '--'.$delimiter."\r\n";
-            $data .= 'Content-Disposition: form-data; name = "'.$name.'"';
+            $data .= "--" . $delimiter . "\r\n";
+            $data .= 'Content-Disposition: form-data; name = "' . $name . '"';
             $data .= "\r\n\r\n";
             $data .= $content;
             $data .= "\r\n";
@@ -896,9 +845,9 @@ class requests
 
         foreach ($file_fields as $input_name => $file) 
         {
-            $data .= '--'.$delimiter."\r\n";
-            $data .= 'Content-Disposition: form-data; name = "'.$input_name.'";'.
-                ' filename="'.$file['filename'].'"'."\r\n";
+            $data .= "--" . $delimiter . "\r\n";
+            $data .= 'Content-Disposition: form-data; name = "' . $input_name . '";' . 
+                ' filename="' . $file['filename'] . '"' . "\r\n";
             $data .= "Content-Type: {$file['type']}\r\n";
             $data .= "\r\n";
             $data .= $file['content'];
@@ -906,7 +855,7 @@ class requests
         }
 
         // 结束符
-        $data .= '--'.$delimiter."--\r\n";
+        $data .= "--" . $delimiter . "--\r\n";
 
         //return array(
             //CURLOPT_HTTPHEADER => array(
@@ -918,81 +867,6 @@ class requests
         //);
         return array($delimiter, $data);
     }
-
-    /**
-     * html encoding transform
-     *
-     * @param string $html
-     * @param string $in
-     * @param string $out
-     * @param string $content
-     * @param string $mode
-     *            auto|iconv|mb_convert_encoding
-     * @return string
-     */
-    public static function encoding($html, $in = null, $out = null, $mode = 'auto')
-    {
-        $valid = array(
-            'auto',
-            'iconv',
-            'mb_convert_encoding',
-        );
-        if (isset(self::$output_encoding))
-        {
-            $out = self::$output_encoding;
-        }
-        if ( ! isset($out))
-        {
-            $out = 'UTF-8';
-        }
-        if ( ! in_array($mode, $valid))
-        {
-            throw new Exception('invalid mode, mode='.$mode);
-        }
-        $if = function_exists('mb_convert_encoding');
-        $if = $if && ($mode == 'auto' || $mode == 'mb_convert_encoding');
-        if (function_exists('iconv') && ($mode == 'auto' || $mode == 'iconv'))
-        {
-            $func = 'iconv';
-        }
-        elseif ($if)
-        {
-            $func = 'mb_convert_encoding';
-        }
-        else
-        {
-            throw new Exception('charsetTrans failed, no function');
-        }
-
-        $pattern = '/(<meta[^>]*?charset=([\"\']?))([a-z\d_\-]*)(\2[^>]*?>)/is';
-        if ( ! isset($in))
-        {
-            $n = preg_match($pattern, $html, $in);
-            if ($n > 0)
-            {
-                $in = $in[3];
-            }
-            else
-            {
-                $in = null;
-            }
-            if (empty($in) and function_exists('mb_detect_encoding'))
-            {
-                $in = mb_detect_encoding($html, array('UTF-8', 'GBK', 'GB2312', 'LATIN1', 'ASCII', 'BIG5', 'ISO-8859-1'));
-            }
-        }
-
-        if (isset($in))
-        {
-            if ($in == 'ISO-8859-1')
-            {
-                $in = 'UTF-8';
-            }
-            $old  = error_reporting(error_reporting() & ~E_NOTICE);
-            $html = call_user_func($func, $in, $out.'//IGNORE', $html);
-            error_reporting($old);
-            $html = preg_replace($pattern, "\\1$out\\4", $html, 1);
-        }
-        return $html;
-    }
 }
+
+
