@@ -1,5 +1,5 @@
 # phpspider -- PHP蜘蛛爬虫接口
-由于公司项目需要根据寄售编号、邮编爬取https://www.xdp.co.uk/的物流数据，且我司未与该公司沟通合作开通相关查询接口，因此，对https://github.com/owner888/phpspider项目进行了二次开发，删减了部分代码，修改为web爬虫接口，修改了日志存储策略，并将数据以json形式返回。
+由于公司项目需要根据寄售编号、邮编爬取https://www.xdp.co.uk/ 的物流数据，且我司未与该公司沟通合作开通相关查询接口，因此，对https://github.com/owner888/phpspider 项目进行了二次开发，删减了部分代码，修改为web爬虫接口，修改了日志存储策略，并将数据以json形式返回。
 
 ```
 $configs = array(
